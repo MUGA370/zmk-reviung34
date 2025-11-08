@@ -1,0 +1,55 @@
+# .github/workflows/zmk_build.yml
+
+name: ZMK Build Firmware
+
+# Controla cuándo se ejecuta el workflow
+on:
+  # Se ejecuta al hacer push o pull request solo en la rama principal (master/main)
+  push:
+    branches: [ "main", "master" ]
+  pull_request:
+    branches: [ "main", "master" ]
+  
+  # Permite ejecutarlo manualmente desde la pestaña Actions
+  workflow_dispatch:
+
+# Un workflow está compuesto por uno o más trabajos (jobs)
+jobs:
+  build:
+    # El tipo de runner (servidor virtual)
+    runs-on: ubuntu-latest
+
+    # Pasos a ejecutar
+    steps:
+      # 1. Extrae el código fuente de tu repositorio
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # 2. Configura el entorno de Python/West (necesario para ZMK)
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11' # Versión recomendada para ZMK actual
+
+      # 3. Descarga e inicializa el entorno de ZMK (West)
+      - name: Initialize West Environment
+        run: |
+          pip install west
+          west init -l $GITHUB_WORKSPACE/config
+          west update
+          west zephyr install
+
+      # 4. Ejecuta la compilación usando el archivo build.yaml
+      - name: Build Firmware with ZMK
+        run: west build -p overflow -b ${{ needs.build.outputs.board }} -s ${{ needs.build.outputs.shield }}
+        # Nota: Usamos 'west build' directamente, asumiendo que build.yaml está en la raíz
+        # y que el shield/board se definen allí.
+        # Si usas el archivo 'build.yaml' en la raíz, este paso es el correcto.
+        # ¡Asegúrate de que el nombre del 'shield' en build.yaml sea el correcto!
+      
+      # 5. Sube los archivos generados (Artifacts)
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ github.sha }}
+          path: build/zephyr/*.uf2 # Ruta típica donde ZMK guarda los .uf2
